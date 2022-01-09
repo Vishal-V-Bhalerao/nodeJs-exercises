@@ -16,7 +16,7 @@ const DB_PATH = path.join(__dirname, "my.db");
 const DB_SQL_PATH = path.join(__dirname, "mydb.sql");
 
 var args = require("minimist")(process.argv.slice(2), {
-	string: ["other",],
+	string: ["UserData",],
 });
 
 main().catch(console.error);
@@ -27,14 +27,16 @@ main().catch(console.error);
 var SQL3;
 
 async function main() {
-	if (!args.other) {
-		error("Missing '--other=..'");
+	if (!args.UserData) {
+		error("Missing '--UserData=..'");
 		return;
 	}
 
-	// define some SQLite3 database helpers
-	// opening the data database, opening in memory, creating database file with
-	// all the basic things needed for sql lite
+	/**
+	* define some SQLite3 database helpers
+	* opening the data database, opening in memory, creating database file with
+	* all the basic things needed for sql lite
+	*/
 	var myDB = new sqlite3.Database(DB_PATH);
 	// creating helper functions
 	SQL3 = {
@@ -61,15 +63,26 @@ async function main() {
 	// asynchronous operation, creating Content and UserData tables
 	await SQL3.exec(initSQL)
 
-	var userData = args.other;
+	var userData = args.UserData;
 	var content = Math.trunc(Math.random() * 1E9);
-	var userDataID = InsertOrLookUp()
+	var userDataID = await InsertOrLookUp(userData)
 	if (userDataID) {
-		await insertContent(userDataID)
+		var contentID = await insertContent(userDataID)
+		if (contentID) {
+			await printALlData()
+			console.log('Success ..!')
+			return
+		}
 	}
-	// ***********
-
+	error('Oops..! something went wrong')
+	// ************************************************************************
 	// TODO: insert values and print all records
+
+	/**
+	 * To insert User data into database.
+	 * @param { user data string received from command line arg } userData 
+	 * @returns  id of the inserted row
+	 */
 	async function InsertOrLookUp(userData) {
 		// lookup to find presence of same data
 		var result = await SQL3.get(
@@ -102,6 +115,11 @@ async function main() {
 			}
 		};
 	}
+	/**
+	 * To insert content data with  user data id associated  with it
+	 * @param {User data ID to be inserted in content table} userDataID 
+	 * @returns  id of the inserted row
+	 */
 	async function insertContent(userDataID) {
 		var result = await SQL3.run(
 			`
@@ -116,24 +134,29 @@ async function main() {
 			return result.lastID
 		}
 	}
+	/**
+	 * To Print all data into command line in table format
+	 */
 	async function printALlData() {
-		var result = await SQL3.get(
+		// returns array of values
+		var result = await SQL3.all(
 			`
 			SELECT 
-				id as index
-				data as UserData
-				data as 
+				UserData.data as UserData,
+				Content.data as Content
 			FROM
-				UserData
-			WHERE 
-				Data = ?
-			`,
-			userData
+				UserData JOIN Content
+				ON (UserData.id = Content.userDataID)
+			ORDER BY 
+				UserData.id DESC, Content.data ASC
+			`
 		)
+		if (result && result.length > 0) {
+			console.table(result)
+		}
 	}
 	error("Oops!");
 }
-
 function error(err) {
 	if (err) {
 		console.error(err.toString());
