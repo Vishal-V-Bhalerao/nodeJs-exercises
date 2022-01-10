@@ -37,11 +37,36 @@ var SQL3 = {
 	all: util.promisify(myDB.all.bind(myDB)),
 	exec: util.promisify(myDB.exec.bind(myDB)),
 };
-
+// to handle static file requests
 var fileServer = new staticAlias.Server(WEB_PATH, {
 	cache: 100,
-	serverInfo: "Node Workshop: ex5",
+	serverInfo: "Node Exercise",
 	alias: [
+		{
+			// regex to serve index.html if route has /index or nothing
+			match: /^\/(?:index\/?)?(?:[?#].*$)?$/,
+			serve: "index.html",
+			// if cant find index.html serve 404
+			force: true,
+		},
+		{	// if route has js file then serve js files as it is
+			match: /^\/js\/.+$/,
+			serve: "<% absPath %>",
+			// if cant find js file serve 404
+			force: true,
+		},
+		{
+			// serve html file with same name as route
+			match: /^\/(?:[\w\d]+)(?:[\/?#].*$)?$/,
+			serve: function onMatch(params) {
+				return `${params.basename}.html`;
+			},
+		},
+		// for 404 html
+		{
+			match: /[^]/,
+			serve: "404.html",
+		},
 	],
 });
 // handleRequest method receives res and req streams to operate on http operations  
@@ -62,15 +87,27 @@ function main() {
  * @param {response stream for sending info to client} res 
  */
 async function handleRequest(req, res) {
-	if (req.url == "/hello") {
-		// setting response header
-		res.writeHead(200, { "Content-type": "text/plain" });
-		res.end("Hello World")
+	if (req.url == "/get-records") {
+		let records = await getAllRecords();
+		res.writeHead(200, {
+			'Content-Type': 'application/json',
+			// API response should not be cached
+			'Cache-Control': 'no-cache'
+		})
+		res.end(JSON.stringify(records))
+	} else {
+		// delegating static file requests from webserver to file server
+		fileServer.serve(req, res);
 	}
-	else {
-		res.writeHead(404, { "Content-type": "text/plain" });
-		res.end("Page not found")
-	}
+	// if (req.url == "/hello") {
+	// 	// setting response header
+	// 	res.writeHead(200, { "Content-type": "text/plain" });
+	// 	res.end("Hello World")
+	// }
+	// else {
+	// 	res.writeHead(404, { "Content-type": "text/plain" });
+	// 	res.end("Page not found")
+	// }
 }
 // *************************
 // NOTE: if sqlite3 is not working for you,
@@ -79,14 +116,14 @@ async function handleRequest(req, res) {
 async function getAllRecords() {
 	var result = await SQL3.all(
 		`
-		SELECT
-			Something.data AS "something",
-			Other.data AS "other"
+		SELECT 
+			UserData.data as UserData,
+			Content.data as Content
 		FROM
-			Something
-			JOIN Other ON (Something.otherID = Other.id)
-		ORDER BY
-			Other.id DESC, Something.data
+			UserData JOIN Content
+			ON (UserData.id = Content.userDataID)
+		ORDER BY 
+			UserData.id DESC, Content.data ASC
 		`
 	);
 
